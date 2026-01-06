@@ -19,6 +19,7 @@ import { playCircle, pauseCircle, stopCircle } from 'ionicons/icons'
 import { useParams, useLocation } from 'react-router-dom'
 import { usePlayer } from '../context/PlayerContext'
 import { Song } from '../types/music.types'
+import DebugConsole from '../components/DebugConsole'
 import './Player.css'
 
 const Player: React.FC = () => {
@@ -26,6 +27,7 @@ const Player: React.FC = () => {
   const location = useLocation<{ song: Song }>()
   const { currentSong, isPlaying, currentTime, duration, isLoading, playSong, pause, resume, stop, seek } = usePlayer()
   const [error, setError] = useState<string | null>(null)
+  const [showDebug, setShowDebug] = useState(false)
 
   const song = location.state?.song
 
@@ -178,6 +180,12 @@ const Player: React.FC = () => {
           )}
         </div>
       </IonContent>
+      
+      {/* Debug Console */}
+      <DebugConsole 
+        show={showDebug} 
+        onToggle={() => setShowDebug(!showDebug)} 
+      />
     </IonPage>
   )
 }

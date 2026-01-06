@@ -1,5 +1,6 @@
 import { Song } from '../types/music.types'
 import { getStreamUrl } from './api.service'
+import { Capacitor } from '@capacitor/core'
 
 type AudioEventCallback = () => void
 
@@ -13,13 +14,15 @@ class AudioService {
   private onLoadedCallback: AudioEventCallback | null = null
   private onErrorCallback: ((error: Error) => void) | null = null
   private mediaSession: any = null
-  private wakeLock: any = null
+  private isNative: boolean = false
+  private audioContext: any = null
 
   constructor() {
     this.audio = new Audio()
+    this.isNative = Capacitor.isNativePlatform()
     this.setupEventListeners()
     this.setupMediaSession()
-    this.setupWakeLock()
+    this.setupBackgroundAudio()
   }
 
   private setupEventListeners() {
@@ -69,13 +72,6 @@ class AudioService {
       console.error('Audio element error:', error, this.audio.error)
       this.onErrorCallback?.(error)
     })
-
-    // Handle visibility change to maintain playback
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.isPlaying()) {
-        console.log('App hidden, maintaining playback')
-      }
-    })
   }
 
   private setupMediaSession() {
@@ -106,25 +102,81 @@ class AudioService {
     }
   }
 
-  private async setupWakeLock() {
-    if ('wakeLock' in navigator) {
-      this.audio.addEventListener('play', async () => {
-        try {
-          this.wakeLock = await (navigator as any).wakeLock.request('screen')
-          console.log('Wake lock acquired')
-        } catch (err) {
-          console.log('Wake lock request failed:', err)
-        }
-      })
+  private async setupBackgroundAudio() {
+    console.log('Setting up background audio support')
 
-      this.audio.addEventListener('pause', () => {
-        if (this.wakeLock) {
-          this.wakeLock.release()
-          this.wakeLock = null
-          console.log('Wake lock released')
+    // Setup AudioContext for better audio handling
+    try {
+      const AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext
+      if (AudioContext) {
+        this.audioContext = new AudioContext()
+        
+        // Resume audio context on user interaction
+        const resumeAudio = () => {
+          if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume()
+          }
         }
-      })
+        
+        document.addEventListener('touchstart', resumeAudio, { once: false })
+        document.addEventListener('click', resumeAudio, { once: false })
+      }
+    } catch (error) {
+      console.log('AudioContext setup failed:', error)
     }
+
+    // Enhanced visibility change handling for background playback
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && this.isPlaying()) {
+        console.log('App backgrounded - maintaining audio playback')
+        
+        // Ensure audio continues playing
+        setTimeout(() => {
+          if (this.currentSong && this.audio.paused) {
+            this.audio.play().catch(console.error)
+          }
+        }, 100)
+      } else if (!document.hidden && this.currentSong) {
+        console.log('App foregrounded - checking audio state')
+        this.updateMediaSession()
+      }
+    })
+
+    // Handle page lifecycle events
+    document.addEventListener('freeze', () => {
+      console.log('Page frozen - audio should continue')
+    })
+
+    document.addEventListener('resume', () => {
+      console.log('Page resumed - checking audio state')
+      if (this.currentSong && this.audio.paused) {
+        this.audio.play().catch(console.error)
+      }
+    })
+
+    // Prevent audio interruption on focus loss
+    window.addEventListener('blur', () => {
+      console.log('Window blur - maintaining audio')
+    })
+
+    window.addEventListener('focus', () => {
+      console.log('Window focus - checking audio state')
+      if (this.currentSong && this.audio.paused) {
+        this.audio.play().catch(console.error)
+      }
+    })
+
+    // Handle audio interruptions
+    this.audio.addEventListener('pause', () => {
+      if (this.currentSong && !this.audio.ended) {
+        console.log('Audio paused unexpectedly, attempting to resume...')
+        setTimeout(() => {
+          if (this.currentSong && this.audio.paused) {
+            this.audio.play().catch(console.error)
+          }
+        }, 500)
+      }
+    })
   }
 
   private updateMediaSession() {
@@ -161,27 +213,55 @@ class AudioService {
       // Stop any currently playing audio first
       this.stop()
       
+      // Request audio focus on native platforms
+      if (this.isNative) {
+        this.requestAudioFocus()
+      }
+      
       // Get stream URL from backend
       const streamUrl = await getStreamUrl(song.videoId)
       console.log('Stream URL received:', streamUrl)
 
       this.currentSong = song
       
-      // Set audio properties for better streaming
+      // Set audio properties for better streaming and background playback
       this.audio.preload = 'auto'
+      this.audio.crossOrigin = 'anonymous'
       
       // Set audio source and load
       this.audio.src = streamUrl
       this.audio.load()
+      
+      // Resume audio context if suspended
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+        await this.audioContext.resume()
+      }
       
       // Load and play
       await this.audio.play()
       
       // Update media session
       this.updateMediaSession()
+      
+      console.log('Audio playback started successfully')
+      
     } catch (error) {
       console.error('Playback error:', error)
       throw error
+    }
+  }
+
+  private requestAudioFocus() {
+    // Request audio focus to prevent other apps from interrupting
+    if ((window as any).cordova?.plugins?.audioManagement) {
+      try {
+        (window as any).cordova.plugins.audioManagement.requestAudioFocus(
+          () => console.log('Audio focus granted'),
+          () => console.log('Audio focus denied')
+        )
+      } catch (error) {
+        console.log('Audio focus request failed:', error)
+      }
     }
   }
 
@@ -190,7 +270,7 @@ class AudioService {
   }
 
   resume() {
-    this.audio.play()
+    this.audio.play().catch(console.error)
   }
 
   stop() {
@@ -201,12 +281,6 @@ class AudioService {
     // Clear media session
     if (this.mediaSession) {
       this.mediaSession.metadata = null
-    }
-    
-    // Release wake lock
-    if (this.wakeLock) {
-      this.wakeLock.release()
-      this.wakeLock = null
     }
   }
 

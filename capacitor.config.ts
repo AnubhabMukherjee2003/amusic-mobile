@@ -17,6 +17,12 @@ const config: CapacitorConfig = {
       launchShowDuration: 2000,
       backgroundColor: '#1a1a2e',
       showSpinner: false
+    },
+    BackgroundMode: {
+      enabled: true,
+      title: 'Amusic',
+      text: 'Playing music in background',
+      silent: false
     }
   }
 };
