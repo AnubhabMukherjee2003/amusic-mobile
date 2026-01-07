@@ -11,25 +11,30 @@ import {
   IonCardContent,
   IonButton,
   IonIcon,
-  IonRange,
   IonSpinner,
-  IonText
+  IonText,
+  IonProgressBar
 } from '@ionic/react'
-import { playCircle, pauseCircle, stopCircle } from 'ionicons/icons'
-import { useParams, useLocation } from 'react-router-dom'
+import { pauseCircle, playCircle, refreshCircle } from 'ionicons/icons'
+import { useLocation } from 'react-router-dom'
 import { usePlayer } from '../context/PlayerContext'
 import { Song } from '../types/music.types'
-import DebugConsole from '../components/DebugConsole'
 import './Player.css'
 
 const Player: React.FC = () => {
-  const { videoId } = useParams<{ videoId: string }>()
   const location = useLocation<{ song: Song }>()
-  const { currentSong, isPlaying, currentTime, duration, isLoading, playSong, pause, resume, stop, seek } = usePlayer()
+  const { currentSong, isPlaying, currentTime, duration, isLoading, playSong, pause, resume } = usePlayer()
   const [error, setError] = useState<string | null>(null)
-  const [showDebug, setShowDebug] = useState(false)
 
   const song = location.state?.song
+
+  // Format time helper function
+  const formatTime = (seconds: number): string => {
+    if (isNaN(seconds) || seconds === 0) return '0:00'
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
 
   // Auto-play when a new song is selected (different from current song)
   useEffect(() => {
@@ -40,7 +45,7 @@ const Player: React.FC = () => {
 
   const handlePlay = async () => {
     if (!song) return
-    
+
     try {
       setError(null)
       await playSong(song)
@@ -53,22 +58,13 @@ const Player: React.FC = () => {
   const handlePlayPause = () => {
     if (isPlaying) {
       pause()
-    } else if (currentSong) {
-      resume()
     } else {
-      handlePlay()
+      resume()
     }
   }
 
-  const handleSeek = (value: number) => {
-    seek(value)
-  }
-
-  const formatTime = (seconds: number): string => {
-    if (isNaN(seconds) || seconds === 0) return '0:00'
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins}:${secs.toString().padStart(2, '0')}`
+  const handleRestart = () => {
+    handlePlay()
   }
 
   if (!song) {
@@ -123,23 +119,20 @@ const Player: React.FC = () => {
             </IonCardContent>
           </IonCard>
 
-          {/* Progress Bar */}
+          {/* Progress Bar - Display Only (No User Control) */}
           <div className="progress-container">
             <div className="time-display">
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
+              <span className="current-time">{formatTime(currentTime)}</span>
+              <span className="total-time">{formatTime(duration)}</span>
             </div>
-            <IonRange
-              value={currentTime}
-              min={0}
-              max={duration || 100}
-              onIonChange={(e) => handleSeek(e.detail.value as number)}
-              disabled={!currentSong || isLoading}
+            <IonProgressBar
+              value={duration > 0 ? currentTime / duration : 0}
               color="primary"
+              className="progress-bar"
             />
           </div>
 
-          {/* Controls */}
+          {/* Simple Controls - Only Pause and Restart */}
           <div className="controls-container">
             {isLoading ? (
               <IonSpinner name="crescent" className="loading-spinner" />
@@ -150,7 +143,7 @@ const Player: React.FC = () => {
                   size="large"
                   onClick={handlePlayPause}
                   disabled={!song}
-                  className="play-button"
+                  className="play-pause-button"
                 >
                   <IonIcon
                     slot="icon-only"
@@ -160,11 +153,16 @@ const Player: React.FC = () => {
                 </IonButton>
                 <IonButton
                   fill="clear"
-                  size="default"
-                  onClick={stop}
-                  disabled={!currentSong}
+                  size="large"
+                  onClick={handleRestart}
+                  disabled={!song}
+                  className="restart-button"
                 >
-                  <IonIcon slot="icon-only" icon={stopCircle} />
+                  <IonIcon
+                    slot="icon-only"
+                    icon={refreshCircle}
+                    className="control-icon"
+                  />
                 </IonButton>
               </>
             )}
@@ -180,12 +178,6 @@ const Player: React.FC = () => {
           )}
         </div>
       </IonContent>
-      
-      {/* Debug Console */}
-      <DebugConsole 
-        show={showDebug} 
-        onToggle={() => setShowDebug(!showDebug)} 
-      />
     </IonPage>
   )
 }

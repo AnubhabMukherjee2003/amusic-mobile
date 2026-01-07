@@ -16,6 +16,7 @@ class AudioService {
   private mediaSession: any = null
   private isNative: boolean = false
   private audioContext: any = null
+  private userPaused: boolean = false
 
   constructor() {
     this.audio = new Audio()
@@ -130,9 +131,9 @@ class AudioService {
       if (document.hidden && this.isPlaying()) {
         console.log('App backgrounded - maintaining audio playback')
         
-        // Ensure audio continues playing
+        // Only auto-resume if it wasn't a user-initiated pause
         setTimeout(() => {
-          if (this.currentSong && this.audio.paused) {
+          if (this.currentSong && this.audio.paused && !this.userPaused) {
             this.audio.play().catch(console.error)
           }
         }, 100)
@@ -149,7 +150,8 @@ class AudioService {
 
     document.addEventListener('resume', () => {
       console.log('Page resumed - checking audio state')
-      if (this.currentSong && this.audio.paused) {
+      // Only auto-resume if it wasn't a user-initiated pause
+      if (this.currentSong && this.audio.paused && !this.userPaused) {
         this.audio.play().catch(console.error)
       }
     })
@@ -161,17 +163,19 @@ class AudioService {
 
     window.addEventListener('focus', () => {
       console.log('Window focus - checking audio state')
-      if (this.currentSong && this.audio.paused) {
+      // Only auto-resume if it wasn't a user-initiated pause
+      if (this.currentSong && this.audio.paused && !this.userPaused) {
         this.audio.play().catch(console.error)
       }
     })
 
     // Handle audio interruptions
     this.audio.addEventListener('pause', () => {
-      if (this.currentSong && !this.audio.ended) {
+      // Only auto-resume if it wasn't a user-initiated pause
+      if (this.currentSong && !this.audio.ended && !this.userPaused) {
         console.log('Audio paused unexpectedly, attempting to resume...')
         setTimeout(() => {
-          if (this.currentSong && this.audio.paused) {
+          if (this.currentSong && this.audio.paused && !this.userPaused) {
             this.audio.play().catch(console.error)
           }
         }, 500)
@@ -212,6 +216,9 @@ class AudioService {
     try {
       // Stop any currently playing audio first
       this.stop()
+      
+      // Reset user pause flag when starting new song
+      this.userPaused = false
       
       // Request audio focus on native platforms
       if (this.isNative) {
@@ -266,11 +273,15 @@ class AudioService {
   }
 
   pause() {
+    this.userPaused = true
     this.audio.pause()
+    console.log('User paused audio')
   }
 
   resume() {
+    this.userPaused = false
     this.audio.play().catch(console.error)
+    console.log('User resumed audio')
   }
 
   stop() {
