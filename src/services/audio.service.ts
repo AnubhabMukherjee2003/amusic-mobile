@@ -16,6 +16,7 @@ class AudioService {
   private mediaSession: any = null
   private isNative: boolean = false
   private audioContext: any = null
+  private isIntentionallyPaused: boolean = false
 
   constructor() {
     this.audio = new Audio()
@@ -130,9 +131,9 @@ class AudioService {
       if (document.hidden && this.isPlaying()) {
         console.log('App backgrounded - maintaining audio playback')
         
-        // Ensure audio continues playing
+        // Ensure audio continues playing (only if not intentionally paused)
         setTimeout(() => {
-          if (this.currentSong && this.audio.paused) {
+          if (this.currentSong && this.audio.paused && !this.isIntentionallyPaused) {
             this.audio.play().catch(console.error)
           }
         }, 100)
@@ -149,7 +150,7 @@ class AudioService {
 
     document.addEventListener('resume', () => {
       console.log('Page resumed - checking audio state')
-      if (this.currentSong && this.audio.paused) {
+      if (this.currentSong && this.audio.paused && !this.isIntentionallyPaused) {
         this.audio.play().catch(console.error)
       }
     })
@@ -161,17 +162,17 @@ class AudioService {
 
     window.addEventListener('focus', () => {
       console.log('Window focus - checking audio state')
-      if (this.currentSong && this.audio.paused) {
+      if (this.currentSong && this.audio.paused && !this.isIntentionallyPaused) {
         this.audio.play().catch(console.error)
       }
     })
 
-    // Handle audio interruptions
+    // Handle audio interruptions (but not intentional pauses)
     this.audio.addEventListener('pause', () => {
-      if (this.currentSong && !this.audio.ended) {
+      if (this.currentSong && !this.audio.ended && !this.isIntentionallyPaused) {
         console.log('Audio paused unexpectedly, attempting to resume...')
         setTimeout(() => {
-          if (this.currentSong && this.audio.paused) {
+          if (this.currentSong && this.audio.paused && !this.isIntentionallyPaused) {
             this.audio.play().catch(console.error)
           }
         }, 500)
@@ -266,10 +267,12 @@ class AudioService {
   }
 
   pause() {
+    this.isIntentionallyPaused = true
     this.audio.pause()
   }
 
   resume() {
+    this.isIntentionallyPaused = false
     this.audio.play().catch(console.error)
   }
 

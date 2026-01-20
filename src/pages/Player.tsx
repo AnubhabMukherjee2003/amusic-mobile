@@ -15,28 +15,26 @@ import {
   IonSpinner,
   IonText
 } from '@ionic/react'
-import { playCircle, pauseCircle, stopCircle } from 'ionicons/icons'
+import { playCircle, pauseCircle, refreshCircle } from 'ionicons/icons'
 import { useParams, useLocation } from 'react-router-dom'
 import { usePlayer } from '../context/PlayerContext'
 import { Song } from '../types/music.types'
-import DebugConsole from '../components/DebugConsole'
 import './Player.css'
 
 const Player: React.FC = () => {
   const { videoId } = useParams<{ videoId: string }>()
   const location = useLocation<{ song: Song }>()
-  const { currentSong, isPlaying, currentTime, duration, isLoading, playSong, pause, resume, stop, seek } = usePlayer()
+  const { currentSong, isPlaying, currentTime, duration, isLoading, playSong, pause, resume, seek } = usePlayer()
   const [error, setError] = useState<string | null>(null)
-  const [showDebug, setShowDebug] = useState(false)
 
   const song = location.state?.song
 
-  // Auto-play when a new song is selected (different from current song)
+  // Only auto-play when component first mounts with a new song
   useEffect(() => {
     if (song && (!currentSong || currentSong.videoId !== song.videoId)) {
       handlePlay()
     }
-  }, [song?.videoId]) // Only trigger when videoId changes
+  }, []) // Empty dependency array - only run once on mount
 
   const handlePlay = async () => {
     if (!song) return
@@ -57,6 +55,15 @@ const Player: React.FC = () => {
       resume()
     } else {
       handlePlay()
+    }
+  }
+
+  const handleRestart = () => {
+    if (currentSong) {
+      seek(0)
+      if (!isPlaying) {
+        resume()
+      }
     }
   }
 
@@ -110,7 +117,7 @@ const Player: React.FC = () => {
             <img
               src={song.thumbnails[song.thumbnails.length - 1]?.url || song.thumbnails[0]?.url}
               alt={song.name}
-              className={`album-art ${isPlaying ? 'playing' : ''}`}
+              className="album-art"
             />
           </div>
 
@@ -160,11 +167,11 @@ const Player: React.FC = () => {
                 </IonButton>
                 <IonButton
                   fill="clear"
-                  size="default"
-                  onClick={stop}
+                  size="large"
+                  onClick={handleRestart}
                   disabled={!currentSong}
                 >
-                  <IonIcon slot="icon-only" icon={stopCircle} />
+                  <IonIcon slot="icon-only" icon={refreshCircle} />
                 </IonButton>
               </>
             )}
@@ -180,12 +187,6 @@ const Player: React.FC = () => {
           )}
         </div>
       </IonContent>
-      
-      {/* Debug Console */}
-      <DebugConsole 
-        show={showDebug} 
-        onToggle={() => setShowDebug(!showDebug)} 
-      />
     </IonPage>
   )
 }
